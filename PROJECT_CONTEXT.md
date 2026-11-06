@@ -217,6 +217,8 @@ The review distribution reconciles with the total of 99,441 orders.
 - Order items, payments and reviews reference existing parent records.
 - Product references to sellers and products were validated.
 - Exception: 623 products do not match the category translation table.
+- The 610 null-category products are the same rows missing name length,
+  description length and photo count (verified: all four missing in 610 rows).
 
 Breakdown:
 
