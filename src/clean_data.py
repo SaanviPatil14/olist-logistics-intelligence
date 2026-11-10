@@ -7,12 +7,41 @@ with numbers verified earlier, so a failure means something changed.
 """
 from pathlib import Path
 import pandas as pd
+import re
+import unicodedata
 
 ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "data" / "raw"
 OUT = ROOT / "data" / "processed"
 SECONDS_PER_DAY = 86400
 
+# Values that are not usable city names; deliberately left unmapped.
+UNKNOWN_SELLER_CITIES = {"04482255", "vendas@creditparts.com.br", "sp / sp",
+                         "sbc/sp", "arraial d'ajuda (porto seguro)"}
+
+def clean_city(text):
+    """Lowercase, strip accents, unify apostrophes, drop trailing state/country."""
+    t = unicodedata.normalize("NFKD", str(text).strip().lower())
+    t = "".join(c for c in t if not unicodedata.combining(c))
+    t = t.replace("´", "'").replace("'", " ").strip()
+    if t in UNKNOWN_SELLER_CITIES or t.replace(" ", "") in {c.replace(" ", "").replace("'", "") for c in UNKNOWN_SELLER_CITIES}:
+        return "unknown"
+    return re.split(r"[/,\\]", t)[0].strip()
+
+def clean_sellers():
+    sellers = pd.read_csv(RAW / "olist_sellers_dataset.csv")
+    sellers["seller_city_clean"] = sellers["seller_city"].map(clean_city)
+
+    # Remove a trailing state code only if it matches the seller's own state.
+    def strip_state_suffix(row):
+        city, state = row["seller_city_clean"], row["seller_state"].lower()
+        for suffix in (f" - {state}", f" {state}"):
+            if city.endswith(suffix) and len(city) > len(suffix):
+                return city[: -len(suffix)].strip()
+        return city
+
+    sellers["seller_city_clean"] = sellers.apply(strip_state_suffix, axis=1)
+    return sellers
 
 def days_between(start, end):
     """Elapsed days from start to end (NaN if either is missing)."""
@@ -98,6 +127,7 @@ def clean_items():
 
     # Category: official translation + 2 manual names; null -> 'unknown'.
     products = pd.read_csv(RAW / "olist_products_dataset.csv")
+    products["product_weight_g_clean"] = products["product_weight_g"].where(products["product_weight_g"] > 0)
     trans = pd.read_csv(RAW / "product_category_name_translation.csv")
     mapping = dict(zip(trans["product_category_name"],
                        trans["product_category_name_english"]))
@@ -117,7 +147,7 @@ def clean_items():
 
     n = len(items)
     items = items.merge(
-        products[["product_id", "category_english", "category_status"]],
+        products[["product_id", "category_english", "category_status","product_weight_g_clean"]],
         on="product_id", how="left", validate="many_to_one")
     assert len(items) == n
     return items
@@ -146,6 +176,12 @@ def main():
     from_items, from_pay = order_level_money(items)
     customers = pd.read_csv(RAW / "olist_customers_dataset.csv",
                             usecols=["customer_id", "customer_unique_id"])
+    sellers = clean_sellers()
+    assert len(sellers) == 3095
+    assert (sellers["seller_city_clean"] == "unknown").sum() == 5
+    assert items["product_weight_g_clean"].isna().sum() >= 8
+    assert "brasilia df" not in set(sellers["seller_city_clean"])
+    sellers.to_csv(OUT / "sellers_clean.csv", index=False)
 
     n_orders = len(oc)
     orders_final = (
