@@ -1,328 +1,199 @@
 # PROJECT CONTEXT: E-commerce Operations & Logistics Intelligence
 
+Last updated: 2026-11-10 (end of Phase 2)
+Repo: https://github.com/SaanviPatil14/olist-logistics-intelligence
+Latest commit when written: a8bb901 (the notebook 02_data_cleaning.ipynb may still be uncommitted)
+
 ## 1. Objective
+Analyze the Olist Brazilian E-commerce dataset (~100k orders) to identify
+operational inefficiencies, delivery bottlenecks, underperforming sellers,
+and logistics optimization opportunities. Portfolio project targeting
+Data Analyst / Business Analyst roles.
 
-Analyze the Olist Brazilian E-commerce dataset (~100k orders) to identify operational inefficiencies, delivery bottlenecks, underperforming sellers, and logistics optimization opportunities.
-
-Portfolio project targeting Data Analyst / Business Analyst roles.
-
-## 2. Tech Stack
-
-- **Programming:** Python (Pandas, NumPy)
-- **Database:** SQL (PostgreSQL preferred, SQLite fallback)
-- **Development:** Jupyter Notebook, VS Code, Git/GitHub, GitHub Codespaces
-- **Visualization:** Matplotlib, Seaborn, Power BI
-- **Machine Learning:** Scikit-learn, XGBoost
+## 2. Tech Stack and Environment
+- Python, Pandas, NumPy, Jupyter, SQL (PostgreSQL preferred, SQLite fallback),
+  Power BI, Scikit-learn, XGBoost, Git/GitHub.
+- Environment: GitHub Codespaces (Linux). Python in the Codespace venv is 3.14
+  (seen in tracebacks). Exact package versions: requirements-lock.txt.
+- Run commands from the project root with `source .venv/bin/activate`.
+- Notebooks run from notebooks/, so they use `../data/...` relative paths.
+- Power BI Desktop is a Windows app and may hit the same local Application
+  Control block (to be tested in Phase 5; Power BI Service on the web is a fallback).
 
 ## 3. Working Rules
-
-- One phase and one step at a time; no full-project dumps.
+- One phase and one step at a time; no full-project dumps (exception: Phase 2
+  was consolidated into src/clean_data.py after every rule was decided).
 - Explain why each operation is needed.
-- Write readable, commented, production-quality code.
-- Use minimal libraries.
-- Never fabricate data, results, or insights. Every number must come from code.
+- Readable, commented code; minimal libraries.
+- Never fabricate data, results, or insights; every number comes from code.
 - Always check for incorrect joins (fan-out) and data leakage.
-- Use relative paths only and ensure reproducible code.
-- Raw data in `data/raw/` must never be modified.
+- Relative paths only; reproducible code.
 - Every file comes with how-to-run and how-to-verify instructions.
-- Verify row counts, primary keys, and relationships through code rather than assumptions.
-- Distinguish verified findings from hypotheses and pending investigations.
+- Every chart must state which population it uses.
 
 ## 4. Phases
-
-1. Dataset understanding & setup       [COMPLETED]
-2. Data cleaning & preprocessing       [ ]
-3. Exploratory Data Analysis            [ ]
+1. Dataset understanding & setup        [DONE]
+2. Data cleaning & preprocessing        [DONE]
+3. Exploratory Data Analysis            [IN PROGRESS, not started]
 4. SQL business analysis                [ ]
 5. Power BI dashboards                  [ ]
 6. Late-delivery prediction (ML)        [ ]
-7. Business recommendations & report   [ ]
-8. GitHub documentation & portfolio    [ ]
+7. Business recommendations & report    [ ]
+8. GitHub documentation & portfolio     [ ]
 
-## 5. Dataset
+## 5. Folder Structure
+```
+olist-logistics-intelligence/
+├── data/raw/          # 9 original CSVs, never edited, not in Git
+├── data/processed/    # outputs of src/clean_data.py, not in Git
+├── notebooks/         # 01_data_understanding, 02_data_cleaning (03_eda next)
+├── src/clean_data.py  # reproducible cleaning script
+├── sql/  powerbi/  reports/figures/  models/  docs/
+├── docs/data_dictionary.md
+├── docs/phase2_cleaning_checklist.md
+├── PROJECT_CONTEXT.md  README.md  requirements.txt  requirements-lock.txt  .gitignore
+```
+Rebuild processed data with: `python src/clean_data.py` (prints "All checks passed.").
 
-**Source:** Kaggle - Brazilian E-Commerce Public Dataset by Olist.
+## 6. Dataset (Kaggle: "Brazilian E-Commerce Public Dataset by Olist")
 
-Raw files are stored in `data/raw/` and must never be modified.
+| Table | Rows (verified) | Grain | Primary key (verified) | Foreign keys |
+|---|---|---|---|---|
+| customers | 99,441 | one customer_id (one per order) | customer_id | none |
+| orders | 99,441 | one order | order_id | customer_id |
+| order_items | 112,650 | one item in an order | (order_id, order_item_id) | order_id, product_id, seller_id |
+| order_payments | 103,886 | one payment part | (order_id, payment_sequential) | order_id |
+| order_reviews | 99,224 | one review | (review_id, order_id); review_id alone NOT unique | order_id |
+| products | 32,951 | one product | product_id | product_category_name |
+| sellers | 3,095 | one seller | seller_id | none |
+| geolocation | 1,000,163 | coordinate sample | none | joins by zip prefix (untested) |
+| category_translation | 71 | one category | product_category_name | none |
 
-The dataset contains 9 CSV tables.
+FK integrity: 0 orphans everywhere except products -> category_translation (623, see 7.6).
 
-| Table | Grain | Primary Key | Foreign Keys |
-|---|---|---|---|
-| customers | One customer_id (per order) | customer_id | None |
-| orders | One order | order_id | customer_id |
-| order_items | One item in an order | (order_id, order_item_id) | order_id, product_id, seller_id |
-| order_payments | One payment part | (order_id, payment_sequential) | order_id |
-| order_reviews | One review | (review_id, order_id) | order_id |
-| products | One product | product_id | product_category_name |
-| sellers | One seller | seller_id | None |
-| geolocation | Coordinate samples | No unique primary key established | Joins by zip_code_prefix |
-| category_translation | One category | product_category_name | None |
+## 7. Verified Findings
 
-### Primary Key Validation
+### 7.1 Keys, customers, reviews
+- customer_id is per order: 99,441 customer_id vs 96,096 customer_unique_id.
+  93,099 people ordered once; 2,997 ordered more than once. Count customers with customer_unique_id.
+- review_id repeats: 1,603 rows share a review_id. 547 orders have 2-3 reviews
+  (543 with 2, 4 with 3); 768 orders have no review.
+- Of the 547 multi-review orders: scores differ in 202; creation dates tie in 155;
+  answer timestamps never tie.
 
-- All listed primary keys passed the uniqueness checks performed in Step 1.5.
-- `review_id` alone is NOT unique.
-- 1,603 rows share a `review_id`.
-- `(review_id, order_id)` is a valid composite primary key.
-- Geolocation has no established unique primary key and must be aggregated before joining.
+### 7.2 Fan-out (proof for the "aggregate before joining" rule)
+- Naive join orders+items+payments: 118,434 rows, payment_value 20,470,726.66.
+- True payments total: 16,008,872.12 (+27.9% inflation from the bad join).
+- Pre-aggregated payments join: 99,441 rows, total 16,008,872.12.
 
-## 6. Key Decisions & Known Pitfalls
+### 7.3 Order status and missing values
+- order_status: delivered 96,478 (97.0%), shipped 1,107, canceled 625,
+  unavailable 609, invoiced 314, processing 301, created 5, approved 2.
+- Nulls in orders: approved 160, carrier date 1,783, customer delivery 2,965.
+- 775 orders have no items: 603 unavailable, 164 canceled, 5 created, 2 invoiced,
+  1 shipped (anomaly). 1 order has no payment.
+- 8 delivered orders have no customer delivery date.
+- 6 canceled orders DO have a customer delivery date (anomaly, cause unknown).
 
-### 6.1 Customer Identification
+### 7.4 Dates and delivery metrics
+- Timestamps parse cleanly. Range: purchase 2016-09-04 to 2018-10-17;
+  estimated delivery up to 2018-11-12. Monthly volume not yet examined.
+- Date logic violations: purchase<approved 0; purchase<customer delivery 0;
+  purchase<estimated 0; carrier pickup before approval 1,359; customer delivery
+  before carrier pickup 23 (all 23 status delivered).
+- Carrier-before-approval gaps: median 17.2 h, p75 26.0 h, max 4,109 h (~171 days);
+  458 over 1 day, 14 over 7 days, 1 over 30 days.
+- Delivery population: delivered AND delivery date present = 96,470 orders
+  (2,971 excluded).
+- Population metrics: delivery_days median 10.22, p95 29.27, p99 46.05, max 209.63;
+  estimated_days median 23.23; delay_days median -11.95, p95 +3.82, max +188.98.
+- All estimated delivery dates are at midnight.
+- Late rate (population): 6.77% calendar-day rule (6,534 late) vs 8.11% timestamp
+  rule (7,826). The rules differ on 1,292 orders.
+- On reload of orders_clean.csv across all 96,476 orders with a delivery date,
+  is_late shows 6,535 True; the population has 6,534 (one of the 6 canceled is late).
 
-- `customer_id` is an order-level customer record identifier.
-- `customer_unique_id` identifies the actual customer across multiple orders.
-- Use `customer_unique_id` for unique customer counts and customer-level analysis.
-- Never interpret `customer_id` as the count of distinct real customers.
+### 7.5 Items
+- price: min 0.85, median 74.99, p99 890, max 6,735; no zero/negative values.
+- freight_value: median 16.26, p99 84.52, max 409.68; 383 items with freight 0; none negative.
+- Top prices are in plausible categories (housewares, computers, art, small appliances).
+- shipping_limit_date minus purchase: min 2.00, median 6.01, p99 19.01 days;
+  0 before purchase; 239 items over 30 days, 4 over 365 days (max 1,056 days;
+  raw max date 2020-04-09). The 239 items are in 209 orders and 45 sellers;
+  187 of those orders are delivered.
 
-### 6.2 Join Integrity and Fan-out
+### 7.6 Products and categories
+- 610 products have null category AND null name length, description length, photo count
+  (same rows). 2 products lack weight/dimensions.
+- 13 products have 2 categories missing from the translation table
+  (portateis_cozinha_e_preparadores_de_alimentos: 10, pc_gamer: 3).
+- Impact on items: null category 1,603 items (1.42%, price revenue 179,535.28, 1.32%);
+  untranslated 24 items (0.02%, 5,514.48, 0.04%). Total 1,627 items (1.44%), ~1.36% of item revenue.
+- category_english has 74 distinct values (71 + 2 manual + 'unknown').
+- 4 products have weight 0 g (impossible), affecting 8 items. No zero dimensions.
+  Weight median 700 g, p99 22,538 g, max 40,425 g.
 
-- `order_items` and `order_payments` are one-to-many relationships with orders.
-- Aggregate `order_items` and `order_payments` to the required grain BEFORE joining to orders when creating order-level analytical tables.
-- Never directly join multiple one-to-many tables and calculate revenue without validating row multiplication.
-- Geolocation must be reduced to one row per zip prefix before joining.
-- Validate row counts, key uniqueness, and payment totals after every major join.
-- Foreign-key integrity has been validated. Six of seven checks showed zero orphan records.
-- The exception is `products.product_category_name` against `category_translation`, with 623 unmatched products.
-
-### 6.3 Analytical Grain
-
-- Delivery-time analysis: order grain.
-- Revenue analysis: payment or order grain, depending on the metric.
-- Product and seller performance: item grain.
-- Customer analysis: customer_unique_id grain.
-- Review analysis: review grain unless explicitly aggregated to order level.
-
-### 6.4 Delivery Analysis
-
-- Delivery-time analysis uses only orders with `order_status = 'delivered'`.
-- 96,478 delivered orders represent approximately 97.0% of all orders.
-- Eight delivered orders have missing customer delivery timestamps.
-- Exclude these eight records from delivery-time calculations and document the exclusion.
-- Do not automatically replace missing delivery dates with estimated values.
-- The other 2,957 missing customer delivery dates belong to non-delivered orders.
-
-### 6.5 Review Handling
-
-- `review_id` alone is not a valid primary key.
-- Use `(review_id, order_id)` as the composite key.
-- 547 orders have multiple reviews.
-- 768 orders have no reviews.
-- A review selection or aggregation rule must be established before order-level review analysis.
-
-### 6.6 Missing Values
-
-Potentially legitimate missing values:
-
-- `order_delivered_customer_date`: 2,965 missing (2.98%).
-- `order_delivered_carrier_date`: 1,783 missing.
-- `order_approved_at`: 160 missing.
-- Review title: 88.34% missing.
-- Review comment: 58.70% missing.
-
-Product data-quality gaps:
-
-- 610 products have a null category.
-- 623 products have no matching category translation.
-- This implies approximately 13 additional products have non-null categories absent from the translation table. Their category values still need inspection.
-- 2 products have missing weight and dimensions.
-- The missing-value pattern across the 610 products requires final confirmation.
-
-Do not treat all missing values as errors. Investigate their business context first.
-
-### 6.7 Orders Without Items or Payments
-
-- 775 orders have no associated order items.
-- Their status distribution:
-  - Unavailable: 603
-  - Canceled: 164
-  - Created: 5
-  - Invoiced: 2
-  - Shipped: 1
-
-- The 603 unavailable and 164 canceled orders generally did not reach fulfilment.
-- One shipped order has no associated items. Treat this as an anomaly and exclude it from item-level analysis.
-- One order has no associated payment. Its business context requires investigation.
-
-### 6.8 Category Translation
-
-- 623 products do not match a category in the translation table.
-- 610 have a null category.
-- Approximately 13 have non-null categories that are not present in the translation table.
-- A category handling strategy must be decided during Phase 2.
-- Potential approaches include retaining Portuguese category names or assigning an `unknown` label.
-- Do not silently drop unmatched products through inner joins.
-
-### 6.9 Machine Learning Leakage Rules (Phase 6)
-
-- Features must be available at the actual prediction time.
-- Actual delivery dates and post-delivery review information must be excluded from prediction features.
-- Use a clearly defined prediction point.
-- Avoid target leakage through derived features.
-- Use appropriate train/test splitting and evaluation metrics.
-
-## 7. Verified Findings (Step 1.5)
-
-### 7.1 Customer Identity
-
-| Metric | Verified Value |
-|---|---:|
-| Total customer records | 99,441 |
-| Distinct customer_id | 99,441 |
-| Distinct customer_unique_id | 96,096 |
-| Customers with exactly one order | 93,099 |
-| Customers with multiple orders | Approximately 2,997 |
-
-- `customer_unique_id` is the correct identifier for customer-level analysis.
-- The customer-to-orders join preserved 99,441 rows.
-- `validate="many_to_one"` passed.
-- No fan-out occurred in this relationship.
-
-### 7.2 Review Distribution
-
-| Metric | Verified Value |
-|---|---:|
-| Orders with exactly one review | 98,126 |
-| Orders with two reviews | 543 |
-| Orders with three reviews | 4 |
-| Orders with multiple reviews | 547 |
-| Orders without reviews | 768 |
-| Orders with at least one review | 98,673 |
-
-The review distribution reconciles with the total of 99,441 orders.
-
-### 7.3 Order Status Distribution
-
-| Order Status | Number of Orders |
-|---|---:|
-| Delivered | 96,478 |
-| Shipped | 1,107 |
-| Canceled | 625 |
-| Unavailable | 609 |
-| Invoiced | 314 |
-| Processing | 301 |
-| Created | 5 |
-| Approved | 2 |
-| **Total** | **99,441** |
-
-- Delivered orders account for approximately 97.0% of all orders.
-- 2,963 orders have not reached delivered status.
-- The delivered population is the base population for delivery-time analysis.
-
-### 7.4 Foreign Key Integrity
-
-- Six of seven foreign-key checks returned zero orphan records.
-- All orders have valid customer references.
-- Order items, payments and reviews reference existing parent records.
-- Product references to sellers and products were validated.
-- Exception: 623 products do not match the category translation table.
-- The 610 null-category products are the same rows missing name length,
-  description length and photo count (verified: all four missing in 610 rows).
-
-Breakdown:
-
-| Category Matching Issue | Count |
-|---|---:|
-| Products with null category | 610 |
-| Additional non-null unmatched categories | Approximately 13 |
-| Total unmatched products | 623 |
-
-The 13 non-null unmatched categories are inferred from the difference and require direct inspection.
-
-### 7.5 Orders Without Items
-
-| Order Status | Orders Without Items |
-|---|---:|
-| Unavailable | 603 |
-| Canceled | 164 |
-| Created | 5 |
-| Invoiced | 2 |
-| Shipped | 1 |
-| **Total** | **775** |
-
-- 774 orders without items have statuses consistent with not reaching normal fulfilment.
-- One shipped order without items is an anomaly requiring documentation.
-- These orders cannot contribute to item-level product and seller analysis.
-
-### 7.6 Delivered Orders With Missing Delivery Dates
-
-- Total missing `order_delivered_customer_date`: 2,965.
-- Delivered orders missing the date: 8.
-- Non-delivered orders missing the date: 2,957.
-- The eight delivered orders with missing timestamps must be excluded from delivery-time calculations.
-
-### 7.7 Join Fan-out Validation
-
-| Scenario | Rows | Payment Value |
-|---|---:|---:|
-| Orders | 99,441 | - |
-| Orders + Items | 113,425 | - |
-| Orders + Items + Payments (naive join) | 118,434 | 20,470,726.66 |
-| Payments table alone | - | 16,008,872.12 |
-| Safe join with pre-aggregated payments | 99,441 | 16,008,872.12 |
-
-- Naive join inflates payment value by 4,461,854.54.
-- This represents approximately 27.9% overstatement.
-- Pre-aggregating payments at order level preserves the correct total.
-
-### 7.8 Additional Missing Values
-
-- 1,783 missing carrier delivery timestamps.
-- 160 missing approval timestamps.
-- 88.34% missing review titles.
-- 58.70% missing review comments.
-- 610 products with null categories and associated descriptive gaps.
-- 2 products with missing physical dimensions and weight.
+### 7.7 Locations
+- Customers: 27 states, all valid; 4,119 cities, no accent/case variants.
+- Sellers: 23 states, all valid; 611 raw city strings. 21 values with unusual
+  characters, 1 seller each (state/country attached, a zip-like number, an email).
+- seller_city_clean: 584 distinct values (see decision log).
 
 ## 8. Decision Log
 
-| Date | Decision | Reason |
+| Step | Decision | Reason |
 |---|---|---|
-| 05-Nov-2026 | Use customer_unique_id for customer-level analysis | customer_id is order-specific |
-| 05-Nov-2026 | Use (review_id, order_id) as review primary key | review_id alone is not unique |
-| 05-Nov-2026 | Pre-aggregate payment records before joining | Prevents 27.9% payment inflation observed in validation |
-| 05-Nov-2026 | Preserve raw CSV files without modification | Ensures reproducibility and traceability |
-| 05-Nov-2026 | Exclude 8 delivered orders with missing customer delivery dates from delivery-time calculations | Delivery duration cannot be calculated reliably |
-| 05-Nov-2026 | Flag 1 shipped order without items as an anomaly | Shipped order has no associated item records |
-| TBD | Database: PostgreSQL or SQLite | To be decided in Phase 4 |
-| TBD | Multiple-review handling strategy | Requires business justification |
-| TBD | Missing category translation strategy | Requires inspection of unmatched category values |
-| TBD | Missing-value treatment strategy | Depends on business context and Phase 2 analysis |
+| 1.2 | Environment: GitHub Codespaces | Local Windows Application Control policy blocks compiled packages (pandas, jupyter.exe); Python 3.15 also lacked wheels |
+| 2.1 | Date-order violations: keep rows, add flags, null only the invalid stage durations | Total delivery time stays valid; dropping would lose data and may bias seller analysis. 1,359 and 23 rows |
+| 2.2 | Delivery population = delivered AND delivery date present (96,470) | Excludes 8 delivered with no date and 6 canceled with a date |
+| 2.3 | is_late = delivery DATE > estimated DATE (calendar-day rule); null if no delivery date | Estimate is a date at midnight, so same-day delivery meets the promise. Timestamp rule kept as is_late_timestamp_rule (sensitivity check, report both in README) |
+| 2.4 | Long shipping deadlines: keep rows, flag_long_shipping_limit (>30 days, 239 items); do not use shipping_limit_date as a feature until its timing is confirmed | ~0.2% of items; 99% fall within 2-19 days. The 30-day threshold is a judgment |
+| 2.5 | Category gaps: keep all items; manual English names for 2 untranslated categories; null -> 'unknown'; keep category_status | 1.44% of items; imputing would be fabrication. The two manual translations are my reading of the Portuguese, still to be checked by the owner |
+| 2.6 | One review per order: latest review_answer_timestamp; add n_reviews; keep 768 no-review orders as null | Answer timestamp never ties. Accepted by default (owner did not object). 202 orders' scores depend on this choice |
+| 2.7 | Cleaning consolidated in src/clean_data.py with asserts against verified numbers | Reproducibility |
+| 2.8 | seller_city_clean: normalize, cut at / , \, five unusable values -> 'unknown' (04482255, vendas@creditparts.com.br, sp / sp, sbc/sp, arraial d'ajuda (porto seguro)); strip a trailing state code only when it equals seller_state (8 sellers) | Avoids guessing. 'aguas claras df' (state SP) conflicts and is left unchanged. Prefer seller_state for regional analysis |
+| 2.8 | product_weight_g_clean = weight with 0 -> null | A physical product cannot weigh 0 g |
 
-## 9. Progress Log
+## 9. Open Items and Unverified Claims
+- Not done by design: geolocation reduction (do when a phase needs it; zip prefixes
+  are int, so leading zeros are lost, keep types consistent in joins); rename of "lenght" columns (optional).
+- Not verified: the full list of the 29 orders_clean.csv columns (29 matches my count
+  of 8+2+5+3+1+4+4+2, not seen in output); whether the 209.6-day delivery and the
+  171-day timestamp gap are the same orders; how the 239 long-deadline items split across the 45 sellers;
+  how many items have null product_weight_g_clean (assert is >= 8); monthly order volume
+  (early 2016 may not be comparable to 2017-2018); why 6 canceled orders have a delivery date.
+- Known gap: seller 'aguas claras df' with state SP (conflict, 1 row).
+- On reload of the processed CSVs, set dtypes explicitly (parse dates; is_late as nullable boolean).
+- Anomalies to exclude from item-level analysis: 1 shipped order with no items.
 
-- [x] Step 1.1 Concepts, folder structure, requirements.
-- [x] Step 1.2 Environment setup (Codespaces) + dataset download.
-- [x] Step 1.3 Raw files in data/raw/ (9 CSVs verified present).
-- [x] Step 1.4 Notebook loads all 9 tables; row counts verified.
-- [x] Step 1.5 Primary key uniqueness, nulls, foreign keys, orphan records, order status and join fan-out checks.
-- [ ] Step 1.6 Data dictionary and prioritized Phase 2 cleaning plan.
+## 10. Outputs of src/clean_data.py (data/processed/, not in Git)
+- orders_clean.csv: 99,441 rows x 29 columns (flags, delivery metrics, is_late,
+  in_delivery_population, customer_unique_id, one review per order, item and payment aggregates)
+- order_items_clean.csv: 112,650 rows x 11 columns (category_english, category_status,
+  flag_long_shipping_limit, product_weight_g_clean)
+- sellers_clean.csv: 3,095 rows (seller_city_clean)
 
-## 10. Pending Investigations (Step 1.6)
+## 11. Leakage Rules for Phase 6
+- Features must be available at the chosen prediction time (define it first).
+- Never use as features: actual delivery dates, delivery_days, delay_days, is_late
+  variants, review_score and review dates, stage durations after the prediction time.
+- order_estimated_delivery_date and shipping_limit_date: check when they are set before using.
+- The target is is_late (calendar-day rule) on the 96,470-order population.
+- Split by time, not randomly, unless justified.
 
-1. Inspect the 13 non-null product categories that do not match the translation table.
-2. Confirm whether the same 610 product rows are missing category, name length, description length and photo count.
-3. Investigate the 2 products missing weight and dimensions.
-4. Inspect the one shipped order without order items.
-5. Investigate the one order without payment information.
-6. Define a strategy for multiple reviews per order.
-7. Document missing-value treatment based on business context.
-8. Prepare a data dictionary for all nine tables.
-9. Create a prioritized list of Phase 2 data-cleaning tasks.
-
-## 11. Phase 1 Completion Criteria
-
-Phase 1 is complete when:
-
-- All nine datasets have been loaded and inspected.
-- Primary keys and composite keys have been validated.
-- Foreign-key integrity has been checked.
-- Missing-value patterns have been documented.
-- Order status distribution has been verified.
-- Unmatched and orphan records have been investigated.
-- Join fan-out risks have been demonstrated and documented.
-- A data dictionary has been prepared.
-- Phase 2 cleaning requirements have been prioritized.
-
-**Current Status:** Step 1.5 is complete. Step 1.6 (data dictionary and prioritized cleaning plan) is the final remaining step before beginning Phase 2: Data Cleaning & Preprocessing.
+## 12. Progress Log
+- [x] 1.1 Concepts, folder structure, requirements
+- [x] 1.2 Environment (Codespaces) and repo setup
+- [x] 1.3 Raw files in data/raw/
+- [x] 1.4 Notebook loads all 9 tables
+- [x] 1.5 Keys, nulls, orphans, fan-out
+- [x] 1.6 Data dictionary and Phase 2 checklist
+- [x] 2.1 Timestamp conversion and date logic
+- [x] 2.2 Delivery metrics and flags
+- [x] 2.3 Population, distributions, late definitions
+- [x] 2.4 Final is_late, items, shipping deadlines
+- [x] 2.5 Category gap impact
+- [x] 2.6 category_english and review duplicates
+- [x] 2.7 Consolidated cleaning script
+- [x] 2.8 Seller city and weight cleaning
+- [ ] 3.1 Reload cleaned CSVs with explicit dtypes and verify key numbers (next)
