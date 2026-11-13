@@ -226,3 +226,4 @@ data/processed/*
 !data/processed/.gitkeep
 models/*.pkl
 .ipynb_checkpoints/
+data/exports/*
