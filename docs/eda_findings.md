@@ -1,4 +1,4 @@
-# EDA Findings (Phase 3)
+# EDA Findings
 
 Main population: 96,203 delivered orders purchased 2017-01 to 2018-08.
 Late = delivered on a later calendar date than the estimate. Late rate in this
@@ -61,9 +61,9 @@ population: 6.79% (6,531 orders). Other populations are stated per finding.
 - Review links are associations, and review data is leakage for Phase 6.
 
 ## 9. Ideas for later phases (hypotheses, not results)
-- SQL (Phase 4): reproduce the state, month, seller and category tables.
-- Power BI (Phase 5): show the late rate next to order counts, and the seller late rate
+- SQL: reproduce the state, month, seller and category tables.
+- Power BI: show the late rate next to order counts, and the seller late rate
   outside the spike months next to the raw rate.
-- ML (Phase 6): candidate features known at purchase time include same_state, customer
+- ML: candidate features known at purchase time include same_state, customer
   state, seller state, order weight, category and purchase month. Check the prediction
   time and the estimated-date and shipping-limit timing first.
