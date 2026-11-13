@@ -221,6 +221,7 @@ FK integrity: 0 orphans everywhere except products -> category_translation (623,
 | 3.4 | Route and seller analyses use single-seller(-state) orders only | An order with several sellers cannot be attributed to one origin |
 | 3.5 | Seller rankings need 30+ orders and a spike-month check | Small samples and timing artifacts mislead. 30 is a judgment |
 | 3.7 | Category late rates use single-category orders, 300+ orders | Avoids double counting. 300 is a judgment |
+| 4.1 | Database: PostgreSQL in the Codespace (local user 'olist', database 'olist') | Chosen by the owner for CV value. SQLite is the fallback if setup fails. Power BI will use CSV exports of query results |
 
 ## 9. Open Items and Unverified Claims
 - Not done by design: geolocation reduction (do when a phase needs it; zip prefixes are
